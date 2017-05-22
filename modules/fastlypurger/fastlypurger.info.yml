@@ -1,0 +1,9 @@
+name: Fastly Purger
+type: module
+description: Fastly CDN integration.
+core: 8.x
+package: Purge - reverse proxies & CDNs
+configure: fastly.admin_settings_form
+dependencies:
+  - fastly
+  - purge

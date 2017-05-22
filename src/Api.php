@@ -2,6 +2,7 @@
 
 namespace Drupal\Fastly;
 
+use Drupal\Component\Utility\UrlHelper;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\fastly\Form\FastlySettingsForm;
 use GuzzleHttp\ClientInterface;
@@ -67,16 +68,53 @@ class Api {
    * Used to validate API key.
    *
    * @return bool
-   *   FALSE if any corrupt data is passed.
+   *   FALSE if any corrupt data is passed or token scope is inadequate.
    */
   public function validateApiKey() {
     try {
-      $response = $this->query('current_customer');
+      $response = $this->query('/tokens/self');
       if ($response->getStatusCode() != 200) {
         return FALSE;
       }
       $json = $this->json($response);
-      return !empty($json->owner_id);
+      if (!empty($json->scopes)) {
+        // GET /tokens/self will return scopes for the passed token, but that
+        // alone is not enough to know if a token can perform purge actions.
+        // Global scope tokens require the engineer or superuser role.
+        $potentially_valid_purge_scopes = 'global';
+        // Purge tokens require both purge_all and purge_select.
+        $valid_purge_scopes = ['purge_all', 'purge_select'];
+
+        if (array_intersect($valid_purge_scopes, $json->scopes) === $valid_purge_scopes) {
+          return TRUE;
+        }
+        elseif (in_array($potentially_valid_purge_scopes, $json->scopes, TRUE)) {
+          try {
+            $response = $this->query('/current_user');
+            if ($response->getStatusCode() != 200) {
+              return FALSE;
+            }
+            $json = $this->json($response);
+            if (!empty($json->role)) {
+              if ($json->role === 'engineer' || $json->role === 'superuser') {
+                return TRUE;
+              }
+              elseif ($json->role === 'billing' || $json->role === 'user') {
+                return FALSE;
+              }
+              else {
+                return FALSE;
+              }
+            }
+          }
+          catch (\Exception $e) {
+            return FALSE;
+          }
+        }
+        else {
+          return FALSE;
+        }
+      }
     }
     catch (\Exception $e) {
       return FALSE;
@@ -93,15 +131,18 @@ class Api {
 
   /**
    * Purge whole service.
-   */
+   *
+   * @return bool
+   *   FALSE if purge failed, TRUE is successful.
+   *   */
   public function purgeAll() {
     if (!empty($this->serviceId)) {
       try {
         $response = $this->query('service/' . $this->serviceId . '/purge_all', [], 'POST');
-
         $result = $this->json($response);
         if ($result->status === 'ok') {
           $this->logger->info('Successfully purged all on Fastly.');
+          return TRUE;
         }
         else {
           $this->logger->critical('Unable to purge all on Fastly. Response status: %status.', [
@@ -113,28 +154,56 @@ class Api {
         $this->logger->critical($e->getMessage());
       }
     }
+    return FALSE;
   }
 
   /**
-   * Purge cache by path.
+   * Performs an actual purge request for the given URL.
+   *
+   * @param string $url
+   *   The full, valid URL to purge.
+   *
+   * @return bool
+   *   FALSE if purge failed or URL is invalid, TRUE is successful.
    */
-  public function purgePath($path) {
-    global $base_url;
-    $path = str_replace($base_url, '', $path);
-    $this->purgeQuery($path);
-    $this->purgeQuery(drupal_get_path_alias($path));
-  }
+  public function purgeUrl($url = '') {
 
-  /**
-   * Performs an actual purge request for the given path.
-   */
-  protected function purgeQuery($path) {
-    drupal_http_request(url($path, ['absolute' => TRUE]), [
-      'headers' => [
-        'Host' => $_SERVER['HTTP_HOST'],
-      ],
-      'method' => 'PURGE',
-    ]);
+    // Validate URL -- this could be improved.
+    if ((strpos($url, 'http') === FALSE) && (strpos($url, 'https') === FALSE)) {
+      return FALSE;
+    }
+    if (!UrlHelper::isValid($url, TRUE)) {
+      return FALSE;
+    }
+    if (strpos($url, ' ') !== FALSE) {
+      return FALSE;
+    }
+
+    if (!empty($this->serviceId)) {
+      try {
+        // Use POST to purge/* to handle requests with http scheme securely.
+        // See: https://docs.fastly.com/guides/purging/authenticating-api-purge-requests#purging-urls-with-an-api-token
+        $response = $this->query('purge/' . $url, [], 'POST');
+        $result = $this->json($response);
+        if ($result->status === 'ok') {
+          $this->logger->info('Successfully purged URL %url. Purge Method: %purge_method.', [
+            '%url' => $url,
+            '%purge_method' => $this->purgeMethod,
+          ]);
+          return TRUE;
+        }
+        else {
+          $this->logger->critical('Unable to purge URL %url from Fastly. Purge Method: %purge_method.', [
+            '%url' => $url,
+            '%purge_method' => $this->purgeMethod,
+          ]);
+        }
+      }
+      catch (RequestException $e) {
+        $this->logger->critical($e->getMessage());
+      }
+    }
+    return FALSE;
   }
 
   /**
@@ -142,22 +211,24 @@ class Api {
    *
    * @param array $keys
    *   A list of Surrogate Key values; in the case of Drupal: cache tags.
+   *
+   * @return bool
+   *   FALSE if purge failed, TRUE is successful.
    */
-  public function purgeKeys($keys) {
+  public function purgeKeys(array $keys = []) {
     if (!empty($this->serviceId)) {
       try {
-        $response = $this->query('service/' . $this->serviceId . '/purge', [], 'POST', [ "Surrogate-Key" => join(" ", $keys) ] );
-
+        $response = $this->query('service/' . $this->serviceId . '/purge', [], 'POST', ["Surrogate-Key" => join(" ", $keys)]);
         $result = $this->json($response);
-        if ( count($result) > 0 ) {
-
+        if (count($result) > 0) {
           $this->logger->info('Successfully purged key(s) %key. Purge Method: %purge_method.', [
             '%key' => join(" ", $keys),
             '%purge_method' => $this->purgeMethod,
           ]);
+          return TRUE;
         }
         else {
-          $this->logger->critical('Unable to purge key(s) %key was purged from Fastly. Purge Method: %purge_method.', [
+          $this->logger->critical('Unable to purge key(s) %key from Fastly. Purge Method: %purge_method.', [
             '%key' => join(" ", $keys),
             '%purge_method' => $this->purgeMethod,
           ]);
@@ -167,6 +238,7 @@ class Api {
         $this->logger->critical($e->getMessage());
       }
     }
+    return FALSE;
   }
 
   /**
@@ -206,6 +278,9 @@ class Api {
 
         case 'POST':
           return $this->httpClient->post($this->host . $uri, $data);
+
+        case 'PURGE':
+          return $this->httpClient->request($method, $uri, $data);
 
         default:
           throw new \Exception('Method :method is not valid for Fastly service.', [
