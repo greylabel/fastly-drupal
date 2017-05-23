@@ -16,7 +16,6 @@ class FastlypurgerServiceProvider extends ServiceProviderBase {
   public function alter(ContainerBuilder $container) {
     $definition = $container->getDefinition('fastly.cache_tags.invalidator');
     $definition->clearTag('cache_tags_invalidator');
-    // $definition->setClass('Drupal\fastlypurger\CacheTagsInvalidator');.
   }
 
 }
