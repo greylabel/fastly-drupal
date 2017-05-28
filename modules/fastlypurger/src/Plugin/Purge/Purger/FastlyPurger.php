@@ -209,7 +209,7 @@ class FastlyPurger extends PurgerBase implements PurgerInterface {
       }
       return InvalidationInterface::FAILED;
     }
-    catch (RequestException $e) {
+    catch (\Exception $e) {
       return InvalidationInterface::FAILED;
     }
     finally {
