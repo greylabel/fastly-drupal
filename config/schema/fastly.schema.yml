@@ -20,6 +20,3 @@ fastly.settings:
     stale_if_error_value:
       type: integer
       label: 'Fastly stale if error value'
-    valid_purge_credentials:
-      type: boolean
-      label: 'Purge credentials are valid'
