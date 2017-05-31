@@ -6,6 +6,7 @@ use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Form\ConfigFormBase;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\fastly\Api;
+use Drupal\fastly\State;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
@@ -27,16 +28,24 @@ class FastlySettingsForm extends ConfigFormBase {
   protected $fastlyApi;
 
   /**
+   * @var \Drupal\fastly\State
+   */
+  protected $state;
+
+  /**
    * Constructs a \Drupal\fastly\Form object.
    *
    * @param \Drupal\Core\Config\ConfigFactoryInterface $config_factory
    *   The factory for configuration objects.
    * @param \Drupal\fastly\Api $fastlyApi
    *   Fastly API for Drupal.
+   * @param \Drupal\fastly\State $state
+   *   Fastly state service for Drupal.
    */
-  public function __construct(ConfigFactoryInterface $config_factory, Api $fastlyApi) {
+  public function __construct(ConfigFactoryInterface $config_factory, Api $fastlyApi, State $state) {
     parent::__construct($config_factory);
     $this->fastlyApi = $fastlyApi;
+    $this->state = $state;
   }
 
   /**
@@ -46,6 +55,7 @@ class FastlySettingsForm extends ConfigFormBase {
     return new static(
       $container->get('config.factory'),
       $container->get('fastly.api'),
+      $container->get('fastly.state')
     );
   }
 
@@ -170,7 +180,7 @@ class FastlySettingsForm extends ConfigFormBase {
    * {@inheritdoc}
    */
   public function validateForm(array &$form, FormStateInterface $form_state) {
-    if (!$this->isValidApiKey($form_state->getValue('api_key'))) {
+    if (!$this->state->validatePurgeCredentials($form_state->getValue('api_key'))) {
       $form_state->setErrorByName('api_key', $this->t('Invalid API token. Make sure the token you are trying has at least <em>global:read</em>, <em>purge_all</em>, and <em>purge_all</em> scopes.'));
     }
   }
@@ -179,6 +189,10 @@ class FastlySettingsForm extends ConfigFormBase {
    * {@inheritdoc}
    */
   public function submitForm(array &$form, FormStateInterface $form_state) {
+
+    // Set purge credentials state to TRUE if we have made it this far.
+    $this->state->setPurgeCredentialsState(TRUE);
+
     $this->config('fastly.settings')
       ->set('api_key', $form_state->getValue('api_key'))
       ->set('service_id', $form_state->getValue('service_id'))
@@ -186,7 +200,6 @@ class FastlySettingsForm extends ConfigFormBase {
       ->set('stale_while_revalidate_value', $form_state->getValue('stale_while_revalidate_value'))
       ->set('stale_if_error', $form_state->getValue('stale_if_error'))
       ->set('stale_if_error_value', $form_state->getValue('stale_if_error_value'))
-      ->set('valid_purge_credentials', TRUE)
       ->save();
 
     parent::submitForm($form, $form_state);
@@ -214,24 +227,6 @@ class FastlySettingsForm extends ConfigFormBase {
 
     ksort($service_options);
     return $service_options;
-  }
-
-  /**
-   * Provides indicator that user entered credentials are valid.
-   *
-   * @param string $api_key
-   *   API key.
-   *
-   * @return bool
-   *   TRUE if API key is valid. FALSE otherwise.
-   */
-  protected function isValidApiKey($api_key) {
-    if (empty($api_key)) {
-      return FALSE;
-    }
-
-    $this->fastlyApi->setApiKey($api_key);
-    return $this->fastlyApi->validateApiKey();
   }
 
 }

@@ -3,6 +3,7 @@
 namespace Drupal\fastlypurger\Plugin\Purge\DiagnosticCheck;
 
 use Drupal\Core\Config\ConfigFactoryInterface;
+use Drupal\fastly\State;
 use Drupal\purge\Plugin\Purge\DiagnosticCheck\DiagnosticCheckBase;
 use Drupal\purge\Plugin\Purge\DiagnosticCheck\DiagnosticCheckInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
@@ -27,6 +28,11 @@ class CredentialCheck extends DiagnosticCheckBase implements DiagnosticCheckInte
   protected $config;
 
   /**
+   * @var \Drupal\fastly\State
+   */
+  protected $state;
+
+  /**
    * Constructs a CredentialCheck object.
    *
    * @param array $configuration
@@ -37,10 +43,13 @@ class CredentialCheck extends DiagnosticCheckBase implements DiagnosticCheckInte
    *   The plugin implementation definition.
    * @param \Drupal\Core\Config\ConfigFactoryInterface $config
    *   The factory for configuration objects.
+   * @param \Drupal\fastly\State $state
+   *   Fastly state service for Drupal.
    */
-  public function __construct(array $configuration, $plugin_id, $plugin_definition, ConfigFactoryInterface $config) {
+  public function __construct(array $configuration, $plugin_id, $plugin_definition, ConfigFactoryInterface $config, State $state) {
     parent::__construct($configuration, $plugin_id, $plugin_definition);
     $this->config = $config->get('fastly.settings');
+    $this->state = $state;
   }
 
   /**
@@ -51,7 +60,8 @@ class CredentialCheck extends DiagnosticCheckBase implements DiagnosticCheckInte
       $configuration,
       $plugin_id,
       $plugin_definition,
-      $container->get('config.factory')
+      $container->get('config.factory'),
+      $container->get('fastly.state')
     );
   }
 
@@ -59,9 +69,13 @@ class CredentialCheck extends DiagnosticCheckBase implements DiagnosticCheckInte
    * {@inheritdoc}
    */
   public function run() {
-    $has_valid_credentials = $this->config->get('valid_purge_credentials');
 
-    if (!$has_valid_credentials) {
+    // This runs on every page - probably want to avoid a web service call here.
+    // $valid_purge_credentials = (!empty($this->config->get('api_key'))) ? $this->state->validatePurgeCredentials($this->config->get('api_key')) : FALSE;
+    // $this->state->setPurgeCredentialsState($valid_purge_credentials);
+    $purge_credentials_state = $this->state->getPurgeCredentialsState();
+
+    if (!$purge_credentials_state) {
       $this->recommendation = $this->t("Invalid Api credentials. Make sure the token you are trying has at least global:read, purge_select, and purge_all scopes.");
       return SELF::SEVERITY_ERROR;
     }

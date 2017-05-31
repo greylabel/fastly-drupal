@@ -20,6 +20,11 @@ services:
     arguments: ['@logger.channel.fastly', '@config.factory']
     tags:
       - { name: event_subscriber }
+  fastly.state:
+    class: Drupal\fastly\State
+    arguments: ['@config.factory', '@state', '@fastly.api']
+    tags:
+      - { name: fastly}
   logger.channel.fastly:
     parent: logger.channel_base
     arguments: ['fastly']
