@@ -4,7 +4,6 @@ namespace Drupal\fastly;
 
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\State\StateInterface;
-use Drupal\fastly\Api;
 
 /**
  * Tracks validity of credentials associated with Fastly Api.
@@ -19,7 +18,7 @@ class State {
   protected $config;
 
   /**
-   * @var StateInterface
+   * @var \Drupal\Core\State\StateInterface
    */
   protected $state;
 
