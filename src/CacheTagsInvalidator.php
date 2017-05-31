@@ -13,14 +13,14 @@ class CacheTagsInvalidator implements CacheTagsInvalidatorInterface {
   /**
    * The Fastly API.
    *
-   * @var \Drupal\Fastly\Api
+   * @var \Drupal\fastly\Api
    */
   protected $fastlyApi;
 
   /**
    * Constructs a CacheTagsInvalidator object.
    *
-   * @param \Drupal\Fastly\Api $fastly_api
+   * @param \Drupal\fastly\Api $fastly_api
    *   The Fastly API.
    */
   public function __construct(Api $fastly_api) {

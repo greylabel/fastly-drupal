@@ -5,6 +5,8 @@ namespace Drupal\fastly\Form;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Form\ConfigFormBase;
 use Drupal\Core\Form\FormStateInterface;
+use Drupal\fastly\Api;
+use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
  * Defines a form to configure module settings.
@@ -20,7 +22,7 @@ class FastlySettingsForm extends ConfigFormBase {
   /**
    * The Fastly API.
    *
-   * @var \Drupal\Fastly\Api
+   * @var \Drupal\fastly\Api
    */
   protected $fastlyApi;
 
@@ -29,9 +31,22 @@ class FastlySettingsForm extends ConfigFormBase {
    *
    * @param \Drupal\Core\Config\ConfigFactoryInterface $config_factory
    *   The factory for configuration objects.
+   * @param \Drupal\fastly\Api $fastlyApi
+   *   Fastly API for Drupal.
    */
-  public function __construct(ConfigFactoryInterface $config_factory) {
-    $this->fastlyApi = \Drupal::service('fastly.api');
+  public function __construct(ConfigFactoryInterface $config_factory, Api $fastlyApi) {
+    parent::__construct($config_factory);
+    $this->fastlyApi = $fastlyApi;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public static function create(ContainerInterface $container) {
+    return new static(
+      $container->get('config.factory'),
+      $container->get('fastly.api'),
+    );
   }
 
   /**

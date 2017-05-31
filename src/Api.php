@@ -1,6 +1,6 @@
 <?php
 
-namespace Drupal\Fastly;
+namespace Drupal\fastly;
 
 use Drupal\Component\Utility\UrlHelper;
 use Drupal\Core\Config\ConfigFactoryInterface;
