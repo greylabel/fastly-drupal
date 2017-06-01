@@ -161,7 +161,7 @@ class FastlyPurger extends PurgerBase implements PurgerInterface {
     // @TODO: Does Fastly have a limit per purge we need to consider (32k)?
     // Also invalidate the cache tags as hashes, to automatically also work for
     // responses that exceed the 16 KB header limit.
-    $hashes = array_merge($tags, SurrogateKeyGenerator::cacheTagsToHashes($tags));
+    $hashes = SurrogateKeyGenerator::cacheTagsToHashes($tags);
     $invalidation_state = $this->invalidateItems('tags', $hashes);
     $this->updateState($invalidations, $invalidation_state);
   }
