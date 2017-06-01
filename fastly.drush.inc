@@ -13,7 +13,7 @@ function fastly_drush_command() {
   $items['fastly-purge-all'] = [
     'description' => 'Purge all fastly caches.',
     'arguments' => [
-      'tags' => 'An comma-separated list of cache tags or keys to purge, or leave empty to purge all.',
+      'tags' => 'An comma-separated list of cache tags or hashes to purge, or leave empty to purge all.',
     ],
     'drupal dependencies' => ['fastly'],
     'aliases' => ['fastly:purge'],
@@ -39,7 +39,6 @@ function drush_fastly_purge_all($tags = '') {
   }
   else {
     $cache_tags = explode(',', $tags);
-    // @TODO: Should also purge hashes.
     $api->purgeKeys($cache_tags);
   }
 }
