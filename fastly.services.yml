@@ -4,7 +4,7 @@ parameters:
 services:
   fastly.api:
     class: Drupal\fastly\Api
-    arguments: ['@config.factory', '%fastly.host%', '@http_client', '@logger.channel.fastly']
+    arguments: ['@config.factory', '%fastly.host%', '@http_client', '@logger.channel.fastly', '@fastly.state']
   fastly.cache_tags.invalidator:
     class: Drupal\fastly\CacheTagsInvalidator
     arguments: ['@fastly.api']
@@ -22,7 +22,7 @@ services:
       - { name: event_subscriber }
   fastly.state:
     class: Drupal\fastly\State
-    arguments: ['@config.factory', '@state', '@fastly.api']
+    arguments: ['@state']
     tags:
       - { name: fastly}
   logger.channel.fastly:

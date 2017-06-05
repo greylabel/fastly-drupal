@@ -31,6 +31,11 @@ class Api {
   private $purgeMethod;
 
   /**
+   * @var \Drupal\fastly\State
+   */
+  protected $state;
+
+  /**
    * Constructs a \Drupal\fastly\Api object.
    *
    * @param \Drupal\Core\Config\ConfigFactoryInterface $config_factory
@@ -41,8 +46,10 @@ class Api {
    *   The HTTP client.
    * @param \Psr\Log\LoggerInterface $logger
    *   The Fastly logger channel.
+   * @param \Drupal\fastly\State $state
+   *   Fastly state service for Drupal.
    */
-  public function __construct(ConfigFactoryInterface $config_factory, $host, ClientInterface $http_client, LoggerInterface $logger) {
+  public function __construct(ConfigFactoryInterface $config_factory, $host, ClientInterface $http_client, LoggerInterface $logger, State $state) {
     $config = $config_factory->get('fastly.settings');
 
     $this->apiKey = $config->get('api_key');
@@ -52,6 +59,7 @@ class Api {
     $this->host = $host;
     $this->httpClient = $http_client;
     $this->logger = $logger;
+    $this->state = $state;
   }
 
   /**
@@ -136,7 +144,7 @@ class Api {
    *   FALSE if purge failed, TRUE is successful.
    *   */
   public function purgeAll() {
-    if (!empty($this->serviceId)) {
+    if ($this->state->getPurgeCredentialsState()) {
       try {
         $response = $this->query('service/' . $this->serviceId . '/purge_all', [], 'POST');
         $result = $this->json($response);
@@ -169,6 +177,7 @@ class Api {
   public function purgeUrl($url = '') {
 
     // Validate URL -- this could be improved.
+    // $url needs to be URL encoded. Need to make sure we can avoid double encoding.
     if ((strpos($url, 'http') === FALSE) && (strpos($url, 'https') === FALSE)) {
       return FALSE;
     }
@@ -179,7 +188,7 @@ class Api {
       return FALSE;
     }
 
-    if (!empty($this->serviceId)) {
+    if ($this->state->getPurgeCredentialsState()) {
       try {
         // Use POST to purge/* to handle requests with http scheme securely.
         // See: https://docs.fastly.com/guides/purging/authenticating-api-purge-requests#purging-urls-with-an-api-token
@@ -216,7 +225,7 @@ class Api {
    *   FALSE if purge failed, TRUE is successful.
    */
   public function purgeKeys(array $keys = []) {
-    if (!empty($this->serviceId)) {
+    if ($this->state->getPurgeCredentialsState()) {
       try {
         $response = $this->query('service/' . $this->serviceId . '/purge', [], 'POST', ["Surrogate-Key" => join(" ", $keys)]);
         $result = $this->json($response);
@@ -305,6 +314,20 @@ class Api {
    */
   public function json(ResponseInterface $response) {
     return json_decode($response->getBody());
+  }
+
+  /**
+   * Used to validate API token for purge related scope.
+   *
+   * @return bool
+   *   TRUE if API token is capable of necessary purge actions, FALSE otherwise.
+   */
+  public function validatePurgeCredentials($apiKey = '') {
+    if (empty($apiKey)) {
+      return FALSE;
+    }
+    $this->setApiKey($apiKey);
+    return $this->validateApiKey();
   }
 
 }

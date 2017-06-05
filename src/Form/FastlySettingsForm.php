@@ -25,7 +25,7 @@ class FastlySettingsForm extends ConfigFormBase {
    *
    * @var \Drupal\fastly\Api
    */
-  protected $fastlyApi;
+  protected $api;
 
   /**
    * @var \Drupal\fastly\State
@@ -37,14 +37,14 @@ class FastlySettingsForm extends ConfigFormBase {
    *
    * @param \Drupal\Core\Config\ConfigFactoryInterface $config_factory
    *   The factory for configuration objects.
-   * @param \Drupal\fastly\Api $fastlyApi
+   * @param \Drupal\fastly\Api $api
    *   Fastly API for Drupal.
    * @param \Drupal\fastly\State $state
    *   Fastly state service for Drupal.
    */
-  public function __construct(ConfigFactoryInterface $config_factory, Api $fastlyApi, State $state) {
+  public function __construct(ConfigFactoryInterface $config_factory, Api $api, State $state) {
     parent::__construct($config_factory);
-    $this->fastlyApi = $fastlyApi;
+    $this->api = $api;
     $this->state = $state;
   }
 
@@ -180,7 +180,7 @@ class FastlySettingsForm extends ConfigFormBase {
    * {@inheritdoc}
    */
   public function validateForm(array &$form, FormStateInterface $form_state) {
-    if (!$this->state->validatePurgeCredentials($form_state->getValue('api_key'))) {
+    if (!$this->api->validatePurgeCredentials($form_state->getValue('api_key'))) {
       $form_state->setErrorByName('api_key', $this->t('Invalid API token. Make sure the token you are trying has at least <em>global:read</em>, <em>purge_all</em>, and <em>purge_all</em> scopes.'));
     }
   }
@@ -215,11 +215,11 @@ class FastlySettingsForm extends ConfigFormBase {
    *   Array of service ids mapped to service names.
    */
   protected function getServiceOptions($api_key) {
-    if (empty($this->fastlyApi->apiKey)) {
+    if (empty($this->api->apiKey)) {
       return [];
     }
 
-    $services = $this->fastlyApi->getServices();
+    $services = $this->api->getServices();
     $service_options = [];
     foreach ($services as $service) {
       $service_options[$service->id] = $service->name;

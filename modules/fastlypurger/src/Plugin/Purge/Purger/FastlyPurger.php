@@ -28,7 +28,7 @@ class FastlyPurger extends PurgerBase implements PurgerInterface {
    *
    * @var \Drupal\fastly\Api
    */
-  protected $fastlyApi;
+  protected $api;
 
   /**
    * The settings configuration.
@@ -61,17 +61,17 @@ class FastlyPurger extends PurgerBase implements PurgerInterface {
    *   The plugin implementation definition.
    * @param \Drupal\Core\Config\ConfigFactoryInterface $config
    *   The factory for configuration objects.
-   * @param \Drupal\fastly\Api $fastlyApi
+   * @param \Drupal\fastly\Api $api
    *   Fastly API for Drupal.
    *
    * @throws \LogicException
    *   Thrown if $configuration['id'] is missing, see Purger\Service::createId.
    */
-  public function __construct(array $configuration, $plugin_id, $plugin_definition, ConfigFactoryInterface $config, Api $fastlyApi) {
+  public function __construct(array $configuration, $plugin_id, $plugin_definition, ConfigFactoryInterface $config, Api $api) {
     parent::__construct($configuration, $plugin_id, $plugin_definition);
 
     $this->config = $config->get('fastly.settings');
-    $this->fastlyApi = $fastlyApi;
+    $this->api = $api;
   }
 
   /**
@@ -193,16 +193,16 @@ class FastlyPurger extends PurgerBase implements PurgerInterface {
   protected function invalidateItems($type = NULL, array $invalidates = []) {
     try {
       if ($type === 'tags') {
-        $purged = $this->fastlyApi->purgeKeys($invalidates);
+        $purged = $this->api->purgeKeys($invalidates);
       }
       elseif ($type === 'urls') {
         // $invalidates should be an array with one URL.
         foreach ($invalidates as $invalidate) {
-          $purged = $this->fastlyApi->purgeUrl($invalidate);
+          $purged = $this->api->purgeUrl($invalidate);
         }
       }
       else {
-        $purged = $this->fastlyApi->purgeAll();
+        $purged = $this->api->purgeAll();
       }
       if ($purged) {
         return InvalidationInterface::SUCCEEDED;
