@@ -5,6 +5,9 @@ namespace Drupal\fastly\Form;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Form\ConfigFormBase;
 use Drupal\Core\Form\FormStateInterface;
+use Drupal\fastly\Api;
+use Drupal\fastly\State;
+use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
  * Defines a form to configure module settings.
@@ -20,18 +23,40 @@ class FastlySettingsForm extends ConfigFormBase {
   /**
    * The Fastly API.
    *
-   * @var \Drupal\Fastly\Api
+   * @var \Drupal\fastly\Api
    */
-  protected $fastlyApi;
+  protected $api;
+
+  /**
+   * @var \Drupal\fastly\State
+   */
+  protected $state;
 
   /**
    * Constructs a \Drupal\fastly\Form object.
    *
    * @param \Drupal\Core\Config\ConfigFactoryInterface $config_factory
    *   The factory for configuration objects.
+   * @param \Drupal\fastly\Api $api
+   *   Fastly API for Drupal.
+   * @param \Drupal\fastly\State $state
+   *   Fastly state service for Drupal.
    */
-  public function __construct(ConfigFactoryInterface $config_factory) {
-    $this->fastlyApi = \Drupal::service('fastly.api');
+  public function __construct(ConfigFactoryInterface $config_factory, Api $api, State $state) {
+    parent::__construct($config_factory);
+    $this->api = $api;
+    $this->state = $state;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public static function create(ContainerInterface $container) {
+    return new static(
+      $container->get('config.factory'),
+      $container->get('fastly.api'),
+      $container->get('fastly.state')
+    );
   }
 
   /**
@@ -60,7 +85,7 @@ class FastlySettingsForm extends ConfigFormBase {
       '#title' => $this->t('API key'),
       '#default_value' => $api_key,
       '#required' => TRUE,
-      '#description' => t("You can find your API key on the Fastly Account Settings page. If you don't have an account yet, please visit <a href='https://www.fastly.com/signup'>https://www.fastly.com/signup</a> on Fastly."),
+      '#description' => t("You can find your personal API tokens on your Fastly Account Settings page. See <a href='https://docs.fastly.com/guides/account-management-and-security/using-api-tokens'>using API tokens</a> for more information. It is recommended that the token you provide has at least <em>global:read</em>, <em>purge_select</em>, and <em>purge_all</em> scopes. If you don't have an account yet, please visit <a href='https://www.fastly.com/signup'>https://www.fastly.com/signup</a> on Fastly."),
       // Update the listed services whenever the API key is modified.
       '#ajax' => [
         'callback' => '::updateServices',
@@ -155,8 +180,8 @@ class FastlySettingsForm extends ConfigFormBase {
    * {@inheritdoc}
    */
   public function validateForm(array &$form, FormStateInterface $form_state) {
-    if (!$this->isValidApiKey($form_state->getValue('api_key'))) {
-      $form_state->setErrorByName('api_key', $this->t('Invalid API key.'));
+    if (!$this->api->validatePurgeCredentials($form_state->getValue('api_key'))) {
+      $form_state->setErrorByName('api_key', $this->t('Invalid API token. Make sure the token you are trying has at least <em>global:read</em>, <em>purge_all</em>, and <em>purge_all</em> scopes.'));
     }
   }
 
@@ -164,6 +189,10 @@ class FastlySettingsForm extends ConfigFormBase {
    * {@inheritdoc}
    */
   public function submitForm(array &$form, FormStateInterface $form_state) {
+
+    // Set purge credentials state to TRUE if we have made it this far.
+    $this->state->setPurgeCredentialsState(TRUE);
+
     $this->config('fastly.settings')
       ->set('api_key', $form_state->getValue('api_key'))
       ->set('service_id', $form_state->getValue('service_id'))
@@ -186,11 +215,11 @@ class FastlySettingsForm extends ConfigFormBase {
    *   Array of service ids mapped to service names.
    */
   protected function getServiceOptions($api_key) {
-    if (empty($this->fastlyApi->apiKey)) {
+    if (empty($this->api->apiKey)) {
       return [];
     }
 
-    $services = $this->fastlyApi->getServices();
+    $services = $this->api->getServices();
     $service_options = [];
     foreach ($services as $service) {
       $service_options[$service->id] = $service->name;
@@ -198,24 +227,6 @@ class FastlySettingsForm extends ConfigFormBase {
 
     ksort($service_options);
     return $service_options;
-  }
-
-  /**
-   * Provides indicator that user entered credentials are valid.
-   *
-   * @param string $api_key
-   *   API key.
-   *
-   * @return bool
-   *   TRUE if API key is valid. FALSE otherwise.
-   */
-  protected function isValidApiKey($api_key) {
-    if (empty($api_key)) {
-      return FALSE;
-    }
-
-    $this->fastlyApi->setApiKey($api_key);
-    return $this->fastlyApi->validateApiKey();
   }
 
 }
